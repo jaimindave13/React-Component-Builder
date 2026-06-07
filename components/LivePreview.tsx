@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Layout, Loader2 } from "lucide-react";
 import { detectComponentName, prepareForPreview } from "@/lib/extract-code";
 
 function buildSrcDoc(rawCode: string): string {
@@ -72,11 +72,21 @@ function buildSrcDoc(rawCode: string): string {
 </html>`;
 }
 
-export default function LivePreview({ code }: { code: string }) {
+export default function LivePreview({
+  code,
+  isStreaming = false,
+}: {
+  code: string;
+  isStreaming?: boolean;
+}) {
   const [debouncedCode, setDebouncedCode] = useState(code);
 
-  // Debounce so the iframe doesn't thrash while code is still streaming in.
+  // Debounce while streaming; clear immediately when code is removed (e.g. new chat).
   useEffect(() => {
+    if (!code) {
+      setDebouncedCode("");
+      return;
+    }
     const id = setTimeout(() => setDebouncedCode(code), 350);
     return () => clearTimeout(id);
   }, [code]);
@@ -88,9 +98,18 @@ export default function LivePreview({ code }: { code: string }) {
 
   if (!debouncedCode) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-500">
-        <Loader2 className="h-6 w-6 animate-spin opacity-60" />
-        <p className="text-sm">Your component preview will appear here.</p>
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+        {isStreaming ? (
+          <>
+            <Loader2 className="h-6 w-6 animate-spin opacity-60" />
+            <p className="text-sm">Generating preview...</p>
+          </>
+        ) : (
+          <>
+            <Layout className="h-6 w-6 opacity-50" />
+            <p className="text-sm">Your component preview will appear here.</p>
+          </>
+        )}
       </div>
     );
   }

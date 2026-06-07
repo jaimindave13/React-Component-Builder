@@ -12,7 +12,7 @@ export default function Home() {
   const handleStreaming = useCallback((s: boolean) => setIsStreaming(s), []);
 
   return (
-    <main className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+    <main className="flex h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <ChatPanel onCode={handleCode} onStreamingChange={handleStreaming} />
       <PreviewPanel code={code} isStreaming={isStreaming} />
     </main>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, Send, Loader2, User, Bot, Square } from "lucide-react";
+import { Sparkles, Send, Loader2, User, Bot, Square, Eye } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { extractCode } from "@/lib/extract-code";
 import ChatHistory, { type ChatListItem } from "@/components/ChatHistory";
@@ -41,6 +41,7 @@ export default function ChatPanel({
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [previewMessageId, setPreviewMessageId] = useState<string | null>(null);
 
   const agentIdRef = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
@@ -116,12 +117,20 @@ export default function ChatPanel({
     await refreshChats();
   }
 
+  function showPreviewForMessage(messageId: string, content: string) {
+    const code = extractCode(content);
+    if (!code) return;
+    setPreviewMessageId(messageId);
+    onCode(code);
+  }
+
   function startNewChat() {
     if (isStreaming) return;
     setActiveChatId(null);
     setMessages([]);
     setInput("");
     setError(null);
+    setPreviewMessageId(null);
     agentIdRef.current = undefined;
     onCode("");
   }
@@ -142,16 +151,26 @@ export default function ChatPanel({
         };
       }>(`/api/chats/${chatId}`);
 
+      const loadedMessages = data.chat.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+      }));
+
       setActiveChatId(data.chat.id);
-      setMessages(
-        data.chat.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-        })),
-      );
+      setMessages(loadedMessages);
       agentIdRef.current = data.chat.agentId ?? undefined;
-      onCode(data.chat.latestCode ?? "");
+
+      const lastWithCode = [...loadedMessages]
+        .reverse()
+        .find((m) => m.role === "assistant" && extractCode(m.content));
+      if (lastWithCode) {
+        setPreviewMessageId(lastWithCode.id);
+        onCode(extractCode(lastWithCode.content));
+      } else {
+        setPreviewMessageId(null);
+        onCode(data.chat.latestCode ?? "");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load chat");
     } finally {
@@ -218,7 +237,10 @@ export default function ChatPanel({
           prev.map((m) => (m.id === assistantId ? { ...m, content: text } : m)),
         );
         const code = extractCode(text);
-        if (code) onCode(code);
+        if (code) {
+          setPreviewMessageId(assistantId);
+          onCode(code);
+        }
       };
 
       while (true) {
@@ -319,7 +341,7 @@ export default function ChatPanel({
   const hasMessages = messages.length > 0;
 
   return (
-    <section className="flex h-full w-full max-w-[620px] border-r border-white/10 bg-slate-950/60">
+    <section className="flex h-full w-full max-w-[620px] border-r border-slate-200 bg-white/80 dark:border-white/10 dark:bg-slate-950/60">
       <ChatHistory
         chats={chats}
         activeChatId={activeChatId}
@@ -329,25 +351,29 @@ export default function ChatPanel({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2.5 border-b border-white/10 px-5 py-4">
+        <header className="flex items-center gap-2.5 border-b border-slate-200 px-5 py-4 dark:border-white/10">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 shadow-lg">
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold text-white">Component Builder</h1>
-            <p className="text-xs text-slate-400">Describe it, generate it, preview it</p>
+            <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-white">
+              Component Builder
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Describe it, generate it, preview it
+            </p>
           </div>
         </header>
 
         <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
           {loadingChat ? (
-            <div className="flex items-center justify-center py-12 text-sm text-slate-400">
+            <div className="flex items-center justify-center py-12 text-sm text-slate-500 dark:text-slate-400">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Loading chat...
             </div>
           ) : !hasMessages ? (
             <div className="space-y-4 pt-6">
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Describe a React component and it will be generated with a live preview.
                 Try one of these:
               </p>
@@ -356,7 +382,7 @@ export default function ChatPanel({
                   <button
                     key={ex}
                     onClick={() => setInput(ex)}
-                    className="block w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-300 transition hover:border-indigo-400/40 hover:bg-slate-800/60"
+                    className="block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm text-slate-600 transition hover:border-indigo-300 hover:bg-indigo-50 dark:border-white/10 dark:bg-slate-900/60 dark:text-slate-300 dark:hover:border-indigo-400/40 dark:hover:bg-slate-800/60"
                   >
                     {ex}
                   </button>
@@ -364,32 +390,46 @@ export default function ChatPanel({
               </div>
             </div>
           ) : (
-            messages.map((m) => <ChatBubble key={m.id} message={m} isStreaming={isStreaming} />)
+            messages.map((m) => (
+              <ChatBubble
+                key={m.id}
+                message={m}
+                isStreaming={isStreaming}
+                isPreviewActive={m.id === previewMessageId}
+                onSeePreview={
+                  m.role === "assistant" && extractCode(m.content)
+                    ? () => showPreviewForMessage(m.id, m.content)
+                    : undefined
+                }
+              />
+            ))
           )}
         </div>
 
         {error && (
-          <div className="mx-5 mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <div className="mx-5 mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
             {error}
           </div>
         )}
 
-        <div className="border-t border-white/10 p-4">
-          <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-inner focus-within:border-indigo-400/50">
+        <div className="border-t border-slate-200 p-4 dark:border-white/10">
+          <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm focus-within:border-indigo-400 dark:border-white/10 dark:bg-slate-900/80 dark:shadow-inner dark:focus-within:border-indigo-400/50">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={3}
               placeholder="Describe the component you want to build..."
-              className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              className="w-full resize-none bg-transparent px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-slate-100 dark:placeholder:text-slate-500"
             />
             <div className="flex items-center justify-between px-1">
-              <span className="text-[11px] text-slate-500">⌘/Ctrl + Enter to generate</span>
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                ⌘/Ctrl + Enter to generate
+              </span>
               {isStreaming ? (
                 <button
                   onClick={stop}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-600 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-500 active:scale-95 dark:bg-slate-700 dark:hover:bg-slate-600"
                 >
                   <Square className="h-3.5 w-3.5" />
                   Stop
@@ -412,7 +452,17 @@ export default function ChatPanel({
   );
 }
 
-function ChatBubble({ message, isStreaming }: { message: Message; isStreaming: boolean }) {
+function ChatBubble({
+  message,
+  isStreaming,
+  isPreviewActive,
+  onSeePreview,
+}: {
+  message: Message;
+  isStreaming: boolean;
+  isPreviewActive?: boolean;
+  onSeePreview?: () => void;
+}) {
   const isUser = message.role === "user";
   const showThinking = !isUser && message.content === "" && isStreaming;
 
@@ -421,7 +471,9 @@ function ChatBubble({ message, isStreaming }: { message: Message; isStreaming: b
       <div
         className={cn(
           "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
-          isUser ? "bg-indigo-500/20 text-indigo-300" : "bg-fuchsia-500/20 text-fuchsia-300",
+          isUser
+            ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300"
+            : "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/20 dark:text-fuchsia-300",
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -431,34 +483,62 @@ function ChatBubble({ message, isStreaming }: { message: Message; isStreaming: b
           "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm",
           isUser
             ? "bg-indigo-500 text-white"
-            : "border border-white/10 bg-slate-900/70 text-slate-200",
+            : "border border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-slate-900/70 dark:text-slate-200",
         )}
       >
         {showThinking ? (
-          <span className="inline-flex items-center gap-2 text-slate-400">
+          <span className="inline-flex items-center gap-2 text-slate-500 dark:text-slate-400">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Generating component...
           </span>
         ) : isUser ? (
           message.content
         ) : (
-          <AssistantSummary content={message.content} />
+          <AssistantSummary
+            content={message.content}
+            onSeePreview={onSeePreview}
+            isPreviewActive={isPreviewActive}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function AssistantSummary({ content }: { content: string }) {
+function AssistantSummary({
+  content,
+  onSeePreview,
+  isPreviewActive,
+}: {
+  content: string;
+  onSeePreview?: () => void;
+  isPreviewActive?: boolean;
+}) {
   const code = extractCode(content);
   if (!code) {
     return <span>{content}</span>;
   }
   const lines = code.split("\n").length;
   return (
-    <span className="inline-flex items-center gap-2 text-slate-300">
-      <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" />
-      Component ready — {lines} lines. See the preview on the right.
-    </span>
+    <div className="flex flex-col gap-2">
+      <span className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
+        <Sparkles className="h-3.5 w-3.5 shrink-0 text-fuchsia-500 dark:text-fuchsia-300" />
+        Component ready — {lines} lines.
+      </span>
+      {onSeePreview && (
+        <button
+          onClick={onSeePreview}
+          className={cn(
+            "inline-flex w-fit items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition active:scale-95",
+            isPreviewActive
+              ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 dark:bg-indigo-500/25 dark:text-indigo-200 dark:ring-indigo-400/40"
+              : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500/25",
+          )}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          {isPreviewActive ? "Viewing preview" : "See Preview"}
+        </button>
+      )}
+    </div>
   );
 }

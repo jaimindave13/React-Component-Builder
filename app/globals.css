@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --scrollbar-thumb: rgba(100, 116, 139, 0.35);
+}
+
+.dark {
   --background: #020617;
   --foreground: #e2e8f0;
+  --scrollbar-thumb: rgba(148, 163, 184, 0.3);
 }
 
 @theme inline {
@@ -23,16 +32,15 @@ body {
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
-/* Subtle scrollbars for the dark UI */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.3);
+  background-color: var(--scrollbar-thumb);
   border-radius: 9999px;
 }

@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Component Builder
 
-## Getting Started
+A Next.js + TypeScript + Tailwind CSS app that turns natural-language prompts into React components using the [Cursor SDK](https://cursor.com/docs/sdk/typescript). Describe a component in the chat panel, hit **Generate**, and watch it stream in with a live preview and copyable source.
 
-First, run the development server:
+## Features
+
+- Chat interface with streaming responses powered by `@cursor/sdk`
+- One-click **Generate** that calls the LLM and renders results in real time
+- Split view: **Live Preview** (sandboxed iframe with Tailwind) and **Code** view
+- Copy the generated code to your clipboard
+- Follow-up edits keep conversation context (the agent is resumed by id)
+- Dark, responsive, UX-friendly UI
+
+## Prerequisites
+
+- Node.js 18+
+- A Cursor API key from the [Cursor dashboard](https://cursor.com/dashboard/integrations)
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure your API key:
+
+```bash
+cp .env.local.example .env.local
+# then edit .env.local and set CURSOR_API_KEY=cursor_...
+```
+
+3. Run the dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+app/api/generate/route.ts  -> Cursor SDK streaming endpoint (SSE, Node runtime)
+components/ChatPanel.tsx    -> prompt input, Generate button, streamed messages
+components/PreviewPanel.tsx -> Preview / Code tab switcher
+components/LivePreview.tsx  -> sandboxed iframe (Tailwind CDN + Babel + React)
+components/CodeView.tsx     -> syntax-highlighted code with a copy button
+lib/extract-code.ts         -> parses fenced code from the model output
+```
 
-## Learn More
+The API route uses `Agent.create` / `Agent.resume` plus `agent.send(...).stream()` to
+stream assistant tokens as Server-Sent Events. The client extracts the fenced
+`tsx` block and renders it inside a sandboxed iframe that loads React, Babel, and
+the Tailwind CDN, so any Tailwind class works without a build step.
 
-To learn more about Next.js, take a look at the following resources:
+## Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The route runs on the Node.js runtime because the Cursor SDK spawns a local
+  executor. `@cursor/sdk` is declared in `serverExternalPackages` so it is not
+  bundled by Turbopack.
+- Default model is `composer-2.5`; override with `CURSOR_MODEL_ID` in `.env.local`.

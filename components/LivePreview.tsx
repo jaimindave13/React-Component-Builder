@@ -8,7 +8,10 @@ function buildSrcDoc(rawCode: string): string {
   const code = prepareForPreview(rawCode);
   const componentName = detectComponentName(code);
 
-  return `<!DOCTYPE html>
+  // Concatenate user code instead of interpolating into a template literal so
+  // backticks and ${...} inside generated components cannot break srcDoc.
+  return (
+    `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -52,11 +55,17 @@ function buildSrcDoc(rawCode: string): string {
     <script type="text/babel" data-presets="react,typescript" data-type="module">
       try {
         const { useState, useEffect, useRef, useMemo, useCallback, useReducer, useContext, Fragment } = React;
-        ${code}
+        ` +
+    code +
+    `
 
         const __Component = typeof App !== "undefined"
           ? App
-          : (typeof ${componentName} !== "undefined" ? ${componentName} : null);
+          : (typeof ` +
+    componentName +
+    ` !== "undefined" ? ` +
+    componentName +
+    ` : null);
 
         if (!__Component) {
           showError("No component found. Make sure a component named 'App' is defined.");
@@ -69,7 +78,8 @@ function buildSrcDoc(rawCode: string): string {
       }
     </script>
   </body>
-</html>`;
+</html>`
+  );
 }
 
 export default function LivePreview({
